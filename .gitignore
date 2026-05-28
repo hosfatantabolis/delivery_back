@@ -1,0 +1,5 @@
+node_modules
+.env
+merged_output.txt
+back.7z
+savetotext.js
