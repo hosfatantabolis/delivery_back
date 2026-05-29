@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
+  phone: { type: String, required: true },  // Add phone field
   password: { type: String, required: true },
   role: { 
     type: String, 
@@ -18,7 +19,5 @@ const userSchema = new mongoose.Schema({
   assignedZone: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
-
-// NO pre-save middleware here - we'll hash passwords in the route
 
 module.exports = mongoose.model('User', userSchema);

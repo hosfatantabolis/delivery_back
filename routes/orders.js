@@ -11,21 +11,26 @@ const generateOrderNumber = () => {
   return `ORD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 };
 
-// GET all orders
+// GET all orders - with role-based filtering
 router.get('/', auth, async (req, res) => {
   try {
     let query = {};
+    
+    // Managers see ONLY orders they created
     if (req.user.role === 'manager') {
       query.createdBy = req.userId;
-    } else if (req.user.role === 'driver') {
+    } 
+    // Drivers see ONLY orders assigned to them
+    else if (req.user.role === 'driver') {
       query.assignedDriver = req.userId;
     }
+    // Admins see all orders
     
     const orders = await Order.find(query)
       .populate('client', 'name email phone contactPerson addresses')
-      .populate('createdBy', 'name')
+      .populate('createdBy', 'name phone')
       .populate('confirmedBy', 'name')
-      .populate('assignedDriver', 'name');
+      .populate('assignedDriver', 'name email phone');
     
     res.json(orders);
   } catch (error) {

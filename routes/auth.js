@@ -8,17 +8,23 @@ const router = express.Router();
 
 // REGISTER - PUBLIC
 router.post('/register', async (req, res) => {
-  console.log('📝 Register request:', req.body);
+  console.log('📝 Register request:', { ...req.body, password: '[HIDDEN]' });
   
   try {
-    const { name, email, password, role, vehicleInfo, assignedZone } = req.body;
+    const { name, email, phone, password, role, vehicleInfo, assignedZone } = req.body;
     
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'All fields are required' });
+    if (!name || !email || !phone || !password) {
+      return res.status(400).json({ error: 'All fields are required (name, email, phone, password)' });
     }
     
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password must be 6+ characters' });
+    }
+    
+    // Validate phone format (basic validation)
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+      return res.status(400).json({ error: 'Please enter a valid phone number (10-15 digits)' });
     }
     
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -38,6 +44,7 @@ router.post('/register', async (req, res) => {
     const user = new User({
       name: name.trim(),
       email: email.toLowerCase().trim(),
+      phone: phone.trim(),
       password: hashedPassword,
       role: role || 'manager',
       privileges: privileges,
@@ -52,11 +59,12 @@ router.post('/register', async (req, res) => {
       id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
       role: user.role,
       privileges: user.privileges
     };
     
-    console.log('✅ User created:', email, 'as', role);
+    console.log('✅ User created:', email, 'as', role, 'Phone:', phone);
     res.status(201).json({ 
       message: 'Registration successful!', 
       user: userResponse 
@@ -105,6 +113,7 @@ router.post('/login', async (req, res) => {
         id: user._id, 
         name: user.name, 
         email: user.email,
+        phone: user.phone,
         role: user.role, 
         privileges: user.privileges 
       } 
@@ -116,19 +125,18 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET current user - FIX THIS ENDPOINT
+// GET current user
 router.get('/me', auth, async (req, res) => {
   try {
-    // The auth middleware already attaches the user to req.user
     if (!req.user) {
       return res.status(401).json({ error: 'User not found' });
     }
     
-    // Return user without password
     const userResponse = {
       id: req.user._id,
       name: req.user.name,
       email: req.user.email,
+      phone: req.user.phone,
       role: req.user.role,
       privileges: req.user.privileges
     };
