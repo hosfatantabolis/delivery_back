@@ -30,7 +30,15 @@ const orderSchema = new mongoose.Schema({
   assignedDriver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   rejectionReason: { type: String },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  assignedDriver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reassignmentHistory: [{
+    previousDriver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    newDriver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    reassignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    reassignedAt: { type: Date, default: Date.now },
+    reason: String
+  }]
 });
 
 // NO pre-save middleware - we'll generate order number in the route

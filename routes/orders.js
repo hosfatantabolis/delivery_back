@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const Client = require('../models/Client');
 const User = require('../models/User'); // Add this line
 const { auth, checkPrivilege } = require('../middleware/auth');
+const {adminMiddleware} = require('../middleware/admin')
 
 const router = express.Router();
 
@@ -14,8 +15,22 @@ const generateOrderNumber = () => {
 // GET all orders - with role-based filtering
 router.get('/', auth, async (req, res) => {
   try {
+    const {
+      creator,
+      date,
+      driver,
+      status,
+      deliveryPeriodStart,
+      deliveryPeriodEnd,
+      client,
+      priority,
+      type,
+      groupByWeek = false
+    } = req.query;
+    
     let query = {};
     
+    // === PRESERVE YOUR EXISTING ROLE-BASED ACCESS ===
     // Managers see ONLY orders they created
     if (req.user.role === 'manager') {
       query.createdBy = req.userId;
@@ -24,7 +39,61 @@ router.get('/', auth, async (req, res) => {
     else if (req.user.role === 'driver') {
       query.assignedDriver = req.userId;
     }
-    // Admins see all orders
+    // Admins see all orders (no additional query filter)
+    
+    // === ADD THE NEW FILTERS (only if user has permission) ===
+    // For managers, only allow filtering by fields they have access to
+    if (req.user.role === 'manager') {
+      // Managers can filter by status, priority, type, delivery period
+      // But NOT by creator (they only see their own) or driver (security)
+      if (status) query.status = status;
+      if (priority) query.priority = priority;
+      if (type) query.type = type;
+      if (deliveryPeriodStart || deliveryPeriodEnd) {
+        query.deliveryDate = {};
+        if (deliveryPeriodStart) query.deliveryDate.$gte = new Date(deliveryPeriodStart);
+        if (deliveryPeriodEnd) query.deliveryDate.$lte = new Date(deliveryPeriodEnd);
+      }
+      if (date) {
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+        query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+      }
+      if (client) query.client = client;
+    } 
+    else if (req.user.role === 'driver') {
+      // Drivers can only filter their assigned orders
+      if (status) query.status = status;
+      if (priority) query.priority = priority;
+      if (deliveryPeriodStart || deliveryPeriodEnd) {
+        query.deliveryDate = {};
+        if (deliveryPeriodStart) query.deliveryDate.$gte = new Date(deliveryPeriodStart);
+        if (deliveryPeriodEnd) query.deliveryDate.$lte = new Date(deliveryPeriodEnd);
+      }
+    } 
+    else if (req.user.role === 'admin') {
+      // Admins can filter by everything
+      if (creator) query.createdBy = creator;
+      if (driver) query.assignedDriver = driver;
+      if (status) query.status = status;
+      if (priority) query.priority = priority;
+      if (type) query.type = type;
+      if (client) query.client = client;
+      if (date) {
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+        query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+      }
+      if (deliveryPeriodStart || deliveryPeriodEnd) {
+        query.deliveryDate = {};
+        if (deliveryPeriodStart) query.deliveryDate.$gte = new Date(deliveryPeriodStart);
+        if (deliveryPeriodEnd) query.deliveryDate.$lte = new Date(deliveryPeriodEnd);
+      }
+    }
     
     const orders = await Order.find(query)
       .populate('client', 'name email phone contactPerson addresses')
@@ -32,9 +101,98 @@ router.get('/', auth, async (req, res) => {
       .populate('confirmedBy', 'name')
       .populate('assignedDriver', 'name email phone');
     
+    // Group by week if requested (for admin view primarily)
+    if (groupByWeek && req.user.role === 'admin') {
+      const groupedOrders = groupOrdersByWeek(orders);
+      return res.json(groupedOrders);
+    }
+    
     res.json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function (same as before)
+function groupOrdersByWeek(orders) {
+  const grouped = {};
+  
+  orders.forEach(order => {
+    if (order.deliveryDate) {
+      const deliveryDate = new Date(order.deliveryDate);
+      const weekStart = getStartOfWeek(deliveryDate);
+      const weekKey = weekStart.toISOString().split('T')[0];
+      
+      if (!grouped[weekKey]) {
+        grouped[weekKey] = {
+          weekStart: weekStart,
+          orders: []
+        };
+      }
+      grouped[weekKey].orders.push(order);
+    }
+  });
+  
+  const sortedGroups = Object.keys(grouped).sort().map(key => ({
+    weekStart: grouped[key].weekStart,
+    orders: grouped[key].orders
+  }));
+  
+  return sortedGroups;
+}
+
+function getStartOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+
+// PUT /api/orders/:orderId/reassign
+router.put('/:orderId/reassign', auth, adminMiddleware, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { newDriverId } = req.body;
+    
+    // Verify order exists
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    // Verify new driver exists and is available
+    const newDriver = await User.findOne({ _id: newDriverId, role: 'driver' });
+    if (!newDriver) {
+      return res.status(404).json({ error: 'Driver not found' });
+    }
+    
+    // Store previous driver for history
+    const previousDriverId = order.assignedDriver;
+    
+    // Update order
+    order.assignedDriver = newDriverId;
+    order.reassignmentHistory = order.reassignmentHistory || [];
+    order.reassignmentHistory.push({
+      previousDriver: previousDriverId,
+      newDriver: newDriverId,
+      reassignedBy: req.user.id,
+      reassignedAt: new Date(),
+      reason: req.body.reason || 'Admin reassignment'
+    });
+    
+    await order.save();
+    
+    // Optional: Notify both drivers via WebSocket/email
+    // notifyDriver(previousDriverId, 'order_unassigned', order);
+    // notifyDriver(newDriverId, 'order_assigned', order);
+    
+    res.json({ 
+      message: 'Order reassigned successfully',
+      order: order
+    });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
