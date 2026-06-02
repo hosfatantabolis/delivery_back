@@ -138,6 +138,8 @@ router.get('/me', auth, async (req, res) => {
       email: req.user.email,
       phone: req.user.phone,
       role: req.user.role,
+      vehicleInfo: req.user.vehicleInfo,
+      assignedZone: req.user.assignedZone,
       privileges: req.user.privileges
     };
     
