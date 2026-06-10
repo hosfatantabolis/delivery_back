@@ -28,7 +28,7 @@ app.use((req, res, next) => {
 });
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: "https://delivery.hosfatantabolis.ru",
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   },
@@ -135,7 +135,7 @@ global.sendToAll = (event, data) => {
 // Middleware
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: "https://delivery.hosfatantabolis.ru",
     credentials: true,
   }),
 );
