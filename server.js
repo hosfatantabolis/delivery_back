@@ -14,15 +14,20 @@ const orderRoutes = require("./routes/orders");
 const app = express();
 const server = http.createServer(app);
 app.use((req, res, next) => {
-  res.setHeader(
-    "Access-Control-Allow-Origin",
+  const allowedOrigins = [
     "https://delivery.hosfatantabolis.ru",
-  );
+    "http://localhost:3000",
+  ];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
   res.setHeader(
     "Access-Control-Allow-Methods",
     "GET, POST, PUT, DELETE, OPTIONS",
   );
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
   if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
