@@ -1,39 +1,42 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
 
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const clientRoutes = require('./routes/clients');
-const orderRoutes = require('./routes/orders');
+const authRoutes = require("./routes/auth");
+const userRoutes = require("./routes/users");
+const clientRoutes = require("./routes/clients");
+const orderRoutes = require("./routes/orders");
 
 const app = express();
 const server = http.createServer(app);
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
   res.setHeader(
-    'Access-Control-Allow-Methods',
-    'GET, POST, PUT, DELETE, OPTIONS',
+    "Access-Control-Allow-Origin",
+    "https://delivery.hosfatantabolis.ru",
   );
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS",
+  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   },
-  transports: ['websocket', 'polling'],
+  transports: ["websocket", "polling"],
 });
 
 // Make io accessible to routes
-app.set('io', io);
+app.set("io", io);
 
 // Track connected users
 const connectedUsers = new Map();
@@ -41,34 +44,34 @@ const connectedUsers = new Map();
 // Socket.IO authentication middleware
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
-  console.log('Socket handshake token present:', !!token);
+  console.log("Socket handshake token present:", !!token);
 
   if (!token) {
-    return next(new Error('Authentication required'));
+    return next(new Error("Authentication required"));
   }
 
   try {
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || 'my_secret_key_123',
+      process.env.JWT_SECRET || "my_secret_key_123",
     );
     socket.userId = decoded.userId;
     socket.userRole = decoded.role;
     console.log(
-      'Socket authenticated:',
+      "Socket authenticated:",
       socket.userId,
-      'Role:',
+      "Role:",
       socket.userRole,
     );
     next();
   } catch (err) {
-    console.error('Socket auth error:', err.message);
-    next(new Error('Invalid token'));
+    console.error("Socket auth error:", err.message);
+    next(new Error("Invalid token"));
   }
 });
 
-io.on('connection', (socket) => {
-  console.log('✅ Client connected:', socket.userId, 'Role:', socket.userRole);
+io.on("connection", (socket) => {
+  console.log("✅ Client connected:", socket.userId, "Role:", socket.userRole);
 
   // Log all outgoing events for this socket
   const originalEmit = socket.emit;
@@ -94,35 +97,35 @@ io.on('connection', (socket) => {
   socket.join(`user_${socket.userId}`);
 
   // Send a test message to confirm connection
-  socket.emit('connection-confirmed', {
-    message: 'Connected to WebSocket server',
+  socket.emit("connection-confirmed", {
+    message: "Connected to WebSocket server",
     userId: socket.userId,
     role: socket.userRole,
   });
 
-  socket.on('disconnect', () => {
-    console.log('❌ Client disconnected:', socket.userId);
+  socket.on("disconnect", () => {
+    console.log("❌ Client disconnected:", socket.userId);
     connectedUsers.delete(socket.userId);
   });
 
-  socket.on('ping', () => {
-    socket.emit('pong');
+  socket.on("ping", () => {
+    socket.emit("pong");
   });
 
-  socket.on('error', (error) => {
-    console.error('Socket error:', error);
+  socket.on("error", (error) => {
+    console.error("Socket error:", error);
   });
 });
 
 // Make notification functions globally available
 global.sendNotificationToRole = (role, notification) => {
   console.log(`Sending notification to role_${role}:`, notification);
-  io.to(`role_${role}`).emit('notification', notification);
+  io.to(`role_${role}`).emit("notification", notification);
 };
 
 global.sendNotificationToUser = (userId, notification) => {
   console.log(`Sending notification to user_${userId}:`, notification);
-  io.to(`user_${userId}`).emit('notification', notification);
+  io.to(`user_${userId}`).emit("notification", notification);
 };
 
 global.sendToAll = (event, data) => {
@@ -132,7 +135,7 @@ global.sendToAll = (event, data) => {
 // Middleware
 app.use(
   cors({
-    origin: 'http://localhost:3000',
+    origin: "http://localhost:3000",
     credentials: true,
   }),
 );
@@ -140,19 +143,19 @@ app.use(express.json());
 
 // MongoDB connection
 mongoose
-  .connect('mongodb://localhost:27017/delivery_system')
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch((err) => console.error('❌ MongoDB error:', err.message));
+  .connect("mongodb://localhost:27017/delivery_system")
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB error:", err.message));
 
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/orders', orderRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/clients", clientRoutes);
+app.use("/api/orders", orderRoutes);
 
 // Test route
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'Server is running' });
+app.get("/api/test", (req, res) => {
+  res.json({ message: "Server is running" });
 });
 
 const PORT = process.env.PORT || 5000;
